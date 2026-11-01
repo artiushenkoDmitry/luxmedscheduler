@@ -1,6 +1,8 @@
 package com.artsiushenka.luxmedscheduler.client;
 
 import com.artsiushenka.luxmedscheduler.config.LuxMedAuthProperties;
+import com.artsiushenka.luxmedscheduler.config.MonitorProperties;
+import com.artsiushenka.luxmedscheduler.model.LuxmedTermsResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -11,11 +13,15 @@ import java.io.IOException;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class LuxMedClient {
@@ -26,7 +32,11 @@ public class LuxMedClient {
 	private static final String LOGIN_PAGE = "/PatientPortal/NewPortal/Page/Account/Login?returnUrl=%2FPage%2FDashboard";
 	private static final String LOGIN_API = "/PatientPortal/Account/LogIn";
 
+	private static final String MAX_SEARCH_DAYS_API = "/PatientPortal/NewPortal/terms/GetMaxSearchDays";
+	private static final String TERMS_API = "/PatientPortal/NewPortal/terms/index";
+
 	private final LuxMedAuthProperties properties;
+	private final MonitorProperties monitorProperties;
 	private final JsonMapper jsonMapper = JsonMapper.builder().build();
 	private final CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
 	private final HttpClient httpClient = HttpClient.newBuilder()
@@ -37,8 +47,73 @@ public class LuxMedClient {
 
 	private volatile String token;
 
-	public LuxMedClient(LuxMedAuthProperties properties) {
+	public LuxMedClient(LuxMedAuthProperties properties, MonitorProperties monitorProperties) {
 		this.properties = properties;
+		this.monitorProperties = monitorProperties;
+	}
+
+	public LuxmedTermsResponse searchSlots() {
+		MonitorProperties.SearchPlace place = monitorProperties.searchPlace();
+		LocalDate dateFrom = LocalDate.now();
+		LocalDate dateTo = dateFrom.plusDays(getMaxSearchDays());
+		String query = "searchPlace.id=" + place.id()
+				+ "&searchPlace.name=" + encode(place.name())
+				+ "&searchPlace.type=0"
+				+ "&serviceVariantId=" + monitorProperties.serviceVariantId()
+				+ "&languageId=10"
+				+ "&searchDateFrom=" + dateFrom
+				+ "&searchDateTo=" + dateTo
+				+ "&searchDatePreset=" + 3
+				+ "&processId=" + UUID.randomUUID().toString()
+				+ "&nextSearch=" + false
+				+ "&searchByMedicalSpecialist=false"
+				+ "&serviceVariantSource=" + 2
+				+ "&locationReplaced=" + false
+				+ "&delocalized=false";
+		try {
+			HttpResponse<String> response = send(HttpRequest.newBuilder(uri(TERMS_API + "?" + query))
+					.header("User-Agent", USER_AGENT)
+					.header("Accept", "application/json, text/plain, */*")
+					.header("Referer", properties.baseUrl() + "/PatientPortal/NewPortal/terms/index?" + query)
+					.header("X-Requested-With", "XMLHttpRequest")
+					.GET());
+			if (response.statusCode() != 200) {
+				throw new IllegalStateException("LuxMed search failed: HTTP " + response.statusCode());
+			}
+			return jsonMapper.readValue(response.body(), LuxmedTermsResponse.class);
+		} catch (IOException e) {
+			throw new IllegalStateException("LuxMed search failed", e);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("LuxMed search interrupted", e);
+		}
+	}
+
+	public int getMaxSearchDays() {
+		MonitorProperties.SearchPlace place = monitorProperties.searchPlace();
+		String query = "cityId=" + place.id()
+				+ "&serviceVariantId=" + monitorProperties.serviceVariantId()
+				+ "&isDelocalized=false";
+		try {
+			HttpResponse<String> response = send(HttpRequest.newBuilder(uri(MAX_SEARCH_DAYS_API + "?" + query))
+					.header("User-Agent", USER_AGENT)
+					.header("Accept", "application/json, text/plain, */*")
+					.header("X-Requested-With", "XMLHttpRequest")
+					.GET());
+			if (response.statusCode() != 200) {
+				throw new IllegalStateException("LuxMed GetMaxSearchDays failed: HTTP " + response.statusCode());
+			}
+			return jsonMapper.readTree(response.body().trim()).asInt();
+		} catch (IOException e) {
+			throw new IllegalStateException("LuxMed GetMaxSearchDays failed", e);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("LuxMed GetMaxSearchDays interrupted", e);
+		}
+	}
+
+	private static String encode(String value) {
+		return URLEncoder.encode(value, StandardCharsets.UTF_8);
 	}
 
 	public synchronized String login() {

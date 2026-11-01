@@ -9,11 +9,14 @@ luxmed:
     password: ${LUXMED_PASSWORD:}
   monitor:
     cron: "0 */5 * * * *"
-    doctor:
-      id: "doctor-123"
-      name: "Jan Kowalski"
-      specialty: "Kardiolog"
-      city: "Wrocław"
-    appointment:
-      date-from: 2026-11-02
-      date-to: 2026-11-30
+#   service-variant-id - нужно указывать вручную. Этот параметр обозначает услугу.
+#    4502 - Konsultacja internistyczna
+#    13410 - Konsultacja internistyczna - telefoniczna
+#    4436  - Konsultacja ortopedyczna
+#    4448 - Konsultacja dermatologiczna
+#    8999 - Pobranie krwi - i innych materiałów - na czczo
+#    14266 - Pobranie krwi - i innych materiałów - nie na czczo
+    service-variant-id: 4502
+    search-place:
+      id: 5
+      name: "Wrocław"
