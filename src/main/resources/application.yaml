@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: luxmedscheduler
+
+luxmed:
+  auth:
+    base-url: https://portalpacjenta.luxmed.pl
+    login: ${LUXMED_LOGIN:}
+    password: ${LUXMED_PASSWORD:}
+  monitor:
+    cron: "0 */5 * * * *"
+    doctor:
+      id: "doctor-123"
+      name: "Jan Kowalski"
+      specialty: "Kardiolog"
+      city: "Wrocław"
+    appointment:
+      date-from: 2026-11-02
+      date-to: 2026-11-30
