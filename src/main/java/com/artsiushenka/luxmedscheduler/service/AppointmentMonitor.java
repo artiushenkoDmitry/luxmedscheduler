@@ -17,18 +17,24 @@ public class AppointmentMonitor {
 	private static final Logger log = LoggerFactory.getLogger(AppointmentMonitor.class);
 
 	private final LuxMedClient client;
-	private final NotificationService notificationService;
+	private final List<NotificationService> notificationServices;
 
-	public AppointmentMonitor(LuxMedClient client, NotificationService notificationService) {
+	public AppointmentMonitor(LuxMedClient client, List<NotificationService> notificationServices) {
 		this.client = client;
-		this.notificationService = notificationService;
+		this.notificationServices = notificationServices;
 	}
 
 	public synchronized void check() {
 		List<AppointmentSlot> slots = toSlots(search());
 		log.info("Found {} slots", slots.size());
 		if (!slots.isEmpty()) {
-			notificationService.notifySlots(slots);
+			for (NotificationService notificationService : notificationServices) {
+				try {
+					notificationService.notifySlots(slots);
+				} catch (RuntimeException e) {
+					log.error("Notification via {} failed", notificationService.getClass().getSimpleName(), e);
+				}
+			}
 		}
 	}
 
